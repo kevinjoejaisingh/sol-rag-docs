@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOL · RAG Architecture</title>
+  <meta name="description" content="Technical documentation for SOL's Multi-Layer RAG System for Solar Permit Compliance">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --amber-50: #fffbeb;
+      --amber-600: #d97706;
+      --amber-700: #b45309;
+    }
+
+    html {
+      font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--gray-600);
+    }
+
+    body {
+      background: #fff;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        padding: 2rem;
+      }
+    }
+
+    .container {
+      max-width: 64rem;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    .header-left .subtitle {
+      color: var(--gray-400);
+      letter-spacing: 0.1em;
+      font-size: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .header-left .title {
+      color: var(--gray-900);
+      font-size: 1.125rem;
+      font-weight: 500;
+    }
+
+    .header-right {
+      text-align: right;
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .step {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .step-number {
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 0.25rem;
+      border: 1px solid var(--gray-300);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gray-400);
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .step-number.highlight {
+      border: 2px solid var(--gray-900);
+      background: var(--gray-900);
+      color: #fff;
+    }
+
+    .step-content {
+      flex: 1;
+      border: 1px solid var(--gray-200);
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }
+
+    .step-content.highlight {
+      border: 2px solid var(--gray-900);
+    }
+
+    .step-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-title {
+      color: var(--gray-900);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .step-subtitle {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+
+    /* Code blocks */
+    pre {
+      background: var(--gray-50);
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      color: var(--gray-600);
+    }
+
+    /* Grid layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+    }
+
+    .grid-6 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .grid-6 {
+        grid-template-columns: repeat(6, 1fr);
+      }
+    }
+
+    /* Labels */
+    .label {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+      margin-bottom: 0.375rem;
+    }
+
+    /* Config boxes */
+    .config-box {
+      background: var(--gray-50);
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+    }
+
+    .config-box .key {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+
+    .config-box .value {
+      color: var(--gray-900);
+      font-size: 0.75rem;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+    }
+
+    .badge-gray {
+      background: var(--gray-100);
+      color: var(--gray-600);
+    }
+
+    .badge-amber {
+      background: var(--amber-50);
+      color: var(--amber-700);
+    }
+
+    /* Inner boxes */
+    .inner-box {
+      border: 1px solid var(--gray-200);
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+    }
+
+    .inner-box-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .inner-box-title {
+      color: var(--gray-900);
+      font-size: 0.75rem;
+    }
+
+    .inner-box-footer {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--gray-100);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .inner-box-footer .key {
+      color: var(--gray-400);
+    }
+
+    .inner-box-footer .value {
+      color: var(--gray-900);
+    }
+
+    /* Summary bar */
+    .summary-bar {
+      margin-top: 0.75rem;
+      background: var(--gray-50);
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .summary-bar .key {
+      color: var(--gray-400);
+    }
+
+    .summary-bar .value {
+      color: var(--gray-900);
+    }
+
+    /* Config row */
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .config-row .key {
+      color: var(--gray-400);
+    }
+
+    .config-row .value {
+      color: var(--gray-900);
+    }
+
+    .config-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    /* Sections */
+    .section {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .section-title {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+    }
+
+    /* Data stores */
+    .data-store {
+      border: 1px solid var(--gray-200);
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+    }
+
+    .data-store-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .data-store-name {
+      color: var(--gray-900);
+      font-size: 0.75rem;
+    }
+
+    .data-store-type {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+
+    /* Metrics */
+    .metric {
+      text-align: center;
+      padding: 0.75rem;
+      background: var(--gray-50);
+      border-radius: 0.375rem;
+    }
+
+    .metric-value {
+      color: var(--gray-900);
+      font-size: 1rem;
+    }
+
+    @media (min-width: 768px) {
+      .metric-value {
+        font-size: 1.125rem;
+      }
+    }
+
+    .metric-label {
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+
+    /* Stack items */
+    .stack-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .stack-item {
+      padding: 0.375rem 0.75rem;
+      border: 1px solid var(--gray-200);
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+    }
+
+    .stack-item-name {
+      color: var(--gray-900);
+    }
+
+    .stack-item-desc {
+      color: var(--gray-400);
+      margin-left: 0.375rem;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--gray-100);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+
+    @media (min-width: 768px) {
+      .footer {
+        flex-direction: row;
+        justify-content: space-between;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a1a1a1;
+    }
+
+    /* Print */
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="subtitle">SOL · RAG ARCHITECTURE</div>
+        <h1 class="title">Multi-Layer Retrieval System</h1>
+      </div>
+      <div class="header-right">
+        <div>v2.0</div>
+        <div>Solar Permit Compliance</div>
+      </div>
+    </header>
+
+    <!-- Steps -->
+    <div class="steps">
+      
+      <!-- Step 01: Input -->
+      <div class="step">
+        <div class="step-number">01</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">INPUT</span>
+            <span class="step-subtitle">POST /ask</span>
+          </div>
+          <pre>{
+  "question": string,
+  "collection_id": string | null,  // null = auto-detect city
+  "user_id": string,
+  "user_email": string
+}</pre>
+        </div>
+      </div>
+
+      <!-- Step 02: City Extraction -->
+      <div class="step">
+        <div class="step-number">02</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">CITY EXTRACTION</span>
+            <span class="step-subtitle">MunicipalityRouter.extract_city_from_question()</span>
+          </div>
+          <div class="grid-2">
+            <div>
+              <div class="label">Regex Patterns</div>
+              <pre>/\bin\s+([A-Z][a-z]+)/i     → "in Arvin"
+/([A-Z][a-z]+)\s+codes?/i   → "Arvin codes"
+/\b([A-Z][a-z]+)\b/         → capitalized word</pre>
+            </div>
+            <div>
+              <div class="label">PostgreSQL Lookup</div>
+              <pre>municipality_map: Dict[str, str]
+  name → chroma_collection_id
+
+"Arvin" → "ca_arvin"</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 03: Embedding -->
+      <div class="step">
+        <div class="step-number">03</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">QUERY EMBEDDING</span>
+            <span class="step-subtitle">OpenAI Embeddings API</span>
+          </div>
+          <div class="grid-3">
+            <div class="config-box">
+              <div class="key">Model</div>
+              <div class="value">text-embedding-3-small</div>
+            </div>
+            <div class="config-box">
+              <div class="key">Dimensions</div>
+              <div class="value">1536</div>
+            </div>
+            <div class="config-box">
+              <div class="key">Output</div>
+              <div class="value">float32[1536]</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 04: Retrieval (Highlighted) -->
+      <div class="step">
+        <div class="step-number highlight">04</div>
+        <div class="step-content highlight">
+          <div class="step-header">
+            <span class="step-title">RETRIEVAL LAYER</span>
+            <span class="step-subtitle">HybridRAGPipeline</span>
+          </div>
+          
+          <div class="grid-2" style="margin-bottom: 1rem;">
+            <!-- State Codes -->
+            <div class="inner-box">
+              <div class="inner-box-header">
+                <span class="inner-box-title">STATE_CODE_COLLECTIONS[]</span>
+                <span class="badge badge-gray">k=3 each</span>
+              </div>
+              <pre>ca_fire_code         # CFC
+ca_electrical_code   # CEC
+ca_building_code     # CBC
+ca_residential_code  # CRC
+ca_energy_code       # Title 24, Part 6</pre>
+              <div class="inner-box-footer">
+                <span class="key">subtotal</span>
+                <span class="value">15 chunks</span>
+              </div>
+            </div>
+
+            <!-- Municipal -->
+            <div class="inner-box">
+              <div class="inner-box-header">
+                <span class="inner-box-title">MUNICIPAL_COLLECTION</span>
+                <span class="badge badge-amber">OVERRIDE</span>
+              </div>
+              <pre>collection: ca_{city_name}
+k: 4
+
+# Municipal rules supersede state
+# baseline when conflicts exist</pre>
+              <div class="inner-box-footer">
+                <span class="key">subtotal</span>
+                <span class="value">4 chunks</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Search Methods -->
+          <div class="inner-box">
+            <div class="inner-box-title" style="margin-bottom: 0.75rem;">SEARCH PIPELINE (per collection)</div>
+            <div class="grid-2">
+              <div>
+                <div class="label">1. Exact Section Lookup</div>
+                <pre>Index: {collection}_sections.json
+
+Patterns:
+  CFC/CBC/CEC: /\b\d{3,6}(\.\d+)*\b/
+  CRC:         /\bR\d{3}([.,]\d+)*\b/
+  Energy:      /\b\d{2,3}\.\d+(\.\d+)?\b/
+
+Examples: 1205.2.1.2, R324.6, 110.10</pre>
+              </div>
+              <div>
+                <div class="label">2. MMR Semantic Search</div>
+                <pre>ChromaDB.max_marginal_relevance_search()
+
+fetch_k: k × 4
+lambda_mult: 0.5
+
+Score = λ×sim(q,d) - (1-λ)×max(sim(d,dᵢ))
+        ─────────   ───────────────────
+        relevance        diversity</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="summary-bar">
+            <span class="key">total_retrieved (deduplicated)</span>
+            <span class="value">~19 chunks</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 05: Context Formatting -->
+      <div class="step">
+        <div class="step-number">05</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">CONTEXT FORMATTING</span>
+            <span class="step-subtitle">_format_docs(state_docs, municipal_docs)</span>
+          </div>
+          <pre>════════════════════════════════════════════════════════════════
+CALIFORNIA STATE CODES (Baseline Requirements)
+════════════════════════════════════════════════════════════════
+[EXACT] [STATE-1] California Fire Code (CFC)
+Section: 1205.2.1.2 > Access and Pathways
+────────────────────────────────────────
+{chunk.page_content}
+
+════════════════════════════════════════════════════════════════
+MUNICIPAL CODE: {municipal_name}
+Note: Municipal rules OVERRIDE state baseline when specified
+════════════════════════════════════════════════════════════════
+[MUNICIPAL-1]
+Section: 8216 > Solar Energy Systems
+────────────────────────────────────────
+{chunk.page_content}</pre>
+        </div>
+      </div>
+
+      <!-- Step 06: LLM -->
+      <div class="step">
+        <div class="step-number">06</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">LLM GENERATION</span>
+            <span class="step-subtitle">OpenAI Chat Completions API</span>
+          </div>
+          <div class="grid-2">
+            <div>
+              <div class="label">Config</div>
+              <div class="config-box config-rows">
+                <div class="config-row">
+                  <span class="key">model</span>
+                  <span class="value">gpt-4o</span>
+                </div>
+                <div class="config-row">
+                  <span class="key">temperature</span>
+                  <span class="value">0.1</span>
+                </div>
+                <div class="config-row">
+                  <span class="key">max_context</span>
+                  <span class="value">128k tokens</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="label">System Prompt (truncated)</div>
+              <pre>"Expert CA solar permit compliance
+assistant with access to STATE CODES
+and MUNICIPAL CODES.
+
+RULES:
+1. Municipal OVERRIDES state baseline
+2. Always cite section numbers
+3. Never fabricate requirements"</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 07: Response -->
+      <div class="step">
+        <div class="step-number">07</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-title">RESPONSE</span>
+            <span class="step-subtitle">AskResponse</span>
+          </div>
+          <pre>{
+  "answer": "📍 **{city}** (with CA State Codes)\n\n{llm_response}",
+  "traces": [
+    { "name": "state_code_search",  "duration_ms": 245,  "details": "15 chunks from 5 codes" },
+    { "name": "municipal_search",   "duration_ms": 89,   "details": "4 chunks from ca_arvin" },
+    { "name": "format_docs",        "duration_ms": 12,   "details": "24891 chars" },
+    { "name": "llm_call",           "duration_ms": 8420, "details": "GPT-4o response" }
+  ],
+  "city": "Arvin",
+  "doc_count": 3522
+}</pre>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Data Stores -->
+    <div class="section">
+      <div class="section-title">DATA STORES</div>
+      <div class="grid-2" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="data-store">
+          <div class="data-store-header">
+            <span class="data-store-name">ChromaDB</span>
+            <span class="data-store-type">Vector Store</span>
+          </div>
+          <pre>./chroma_db/
+├── {uuid}/           # collection data
+├── chroma.sqlite3    # metadata
+└── *_sections.json   # exact lookup index</pre>
+        </div>
+        <div class="data-store">
+          <div class="data-store-header">
+            <span class="data-store-name">PostgreSQL</span>
+            <span class="data-store-type">Routing Database</span>
+          </div>
+          <pre>municipalities
+├── id                  SERIAL
+├── name                VARCHAR
+├── chroma_collection_id VARCHAR
+└── doc_count           INT  # (planned)</pre>
+        </div>
+        <div class="data-store">
+          <div class="data-store-header">
+            <span class="data-store-name">Section Index</span>
+            <span class="data-store-type">JSON Files</span>
+          </div>
+          <pre>{collection}_sections.json
+{
+  "1205.2.1.2": "{chunk_text}",
+  "R324.6":     "{chunk_text}",
+  "110.10":     "{chunk_text}"
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="section">
+      <div class="section-title">SYSTEM METRICS</div>
+      <div class="grid-6">
+        <div class="metric">
+          <div class="metric-value">~9-13s</div>
+          <div class="metric-label">Latency</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">19</div>
+          <div class="metric-label">Chunks</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">5</div>
+          <div class="metric-label">State Codes</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">487+</div>
+          <div class="metric-label">Cities</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">0.1</div>
+          <div class="metric-label">LLM Temp</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">0.5</div>
+          <div class="metric-label">MMR λ</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack -->
+    <div class="section">
+      <div class="section-title">STACK</div>
+      <div class="stack-items">
+        <div class="stack-item">
+          <span class="stack-item-name">ChromaDB</span>
+          <span class="stack-item-desc">Vector DB</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">PostgreSQL</span>
+          <span class="stack-item-desc">Routing</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">OpenAI</span>
+          <span class="stack-item-desc">Embeddings + LLM</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">FastAPI</span>
+          <span class="stack-item-desc">Backend</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">React</span>
+          <span class="stack-item-desc">Frontend</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">LangChain</span>
+          <span class="stack-item-desc">Orchestration</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>HybridRAGPipeline · MunicipalityRouter · smart_driver.py</span>
+      <span>© 2024 GoodLeap · SOL Building Codes</span>
+    </footer>
+
+  </div>
+</body>
+</html>
