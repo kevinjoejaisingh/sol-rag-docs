@@ -27,6 +27,8 @@
       --amber-50: #fffbeb;
       --amber-600: #d97706;
       --amber-700: #b45309;
+      --green-50: #f0fdf4;
+      --green-700: #15803d;
     }
 
     html {
@@ -167,6 +169,12 @@
       gap: 0.75rem;
     }
 
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+    }
+
     .grid-6 {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -222,6 +230,11 @@
     .badge-amber {
       background: var(--amber-50);
       color: var(--amber-700);
+    }
+
+    .badge-green {
+      background: var(--green-50);
+      color: var(--green-700);
     }
 
     /* Inner boxes */
@@ -441,7 +454,7 @@
         <h1 class="title">Multi-Layer Retrieval System</h1>
       </div>
       <div class="header-right">
-        <div>v2.0</div>
+        <div>v2.1</div>
         <div>Solar Permit Compliance</div>
       </div>
     </header>
@@ -461,7 +474,11 @@
   "question": string,
   "collection_id": string | null,  // null = auto-detect city
   "user_id": string,
-  "user_email": string
+  "user_email": string,
+  "history": [                     // Conversation context
+    { "role": "user", "content": "..." },
+    { "role": "assistant", "content": "..." }
+  ]
 }</pre>
         </div>
       </div>
@@ -472,7 +489,7 @@
         <div class="step-content">
           <div class="step-header">
             <span class="step-title">CITY EXTRACTION</span>
-            <span class="step-subtitle">MunicipalityRouter.extract_city_from_question()</span>
+            <span class="step-subtitle">MunicipalityService.extract_city_from_question()</span>
           </div>
           <div class="grid-2">
             <div>
@@ -482,11 +499,11 @@
 /\b([A-Z][a-z]+)\b/         → capitalized word</pre>
             </div>
             <div>
-              <div class="label">PostgreSQL Lookup</div>
-              <pre>municipality_map: Dict[str, str]
+              <div class="label">PostgreSQL Lookup (goodleap_dev)</div>
+              <pre>municipalities table:
   name → chroma_collection_id
 
-"Arvin" → "ca_arvin"</pre>
+"Arvin" → "ca_arvin_ca_code_of_ordinances"</pre>
             </div>
           </div>
         </div>
@@ -503,7 +520,7 @@
           <div class="grid-3">
             <div class="config-box">
               <div class="key">Model</div>
-              <div class="value">text-embedding-3-small</div>
+              <div class="value">text-embedding-ada-002</div>
             </div>
             <div class="config-box">
               <div class="key">Dimensions</div>
@@ -522,8 +539,8 @@
         <div class="step-number highlight">04</div>
         <div class="step-content highlight">
           <div class="step-header">
-            <span class="step-title">RETRIEVAL LAYER</span>
-            <span class="step-subtitle">HybridRAGPipeline</span>
+            <span class="step-title">HYBRID RETRIEVAL LAYER</span>
+            <span class="step-subtitle">MultiCollectionRetriever</span>
           </div>
           
           <div class="grid-2" style="margin-bottom: 1rem;">
@@ -533,14 +550,13 @@
                 <span class="inner-box-title">STATE_CODE_COLLECTIONS[]</span>
                 <span class="badge badge-gray">k=3 each</span>
               </div>
-              <pre>ca_fire_code         # CFC
-ca_electrical_code   # CEC
-ca_building_code     # CBC
-ca_residential_code  # CRC
-ca_energy_code       # Title 24, Part 6</pre>
+              <pre>ca_fire_code         # CFC (218 sections)
+ca_electrical_code   # CEC (28 sections)
+ca_building_code     # CBC (190 sections)
+ca_residential_code  # CRC (87 sections)</pre>
               <div class="inner-box-footer">
                 <span class="key">subtotal</span>
-                <span class="value">15 chunks</span>
+                <span class="value">~12 chunks</span>
               </div>
             </div>
 
@@ -564,36 +580,49 @@ k: 4
 
           <!-- Search Methods -->
           <div class="inner-box">
-            <div class="inner-box-title" style="margin-bottom: 0.75rem;">SEARCH PIPELINE (per collection)</div>
-            <div class="grid-2">
+            <div class="inner-box-title" style="margin-bottom: 0.75rem;">HYBRID SEARCH PIPELINE (3 Methods + RRF Fusion)</div>
+            <div class="grid-3">
               <div>
-                <div class="label">1. Exact Section Lookup</div>
+                <div class="label">1. Exact JSON Lookup</div>
                 <pre>Index: {collection}_sections.json
 
 Patterns:
-  CFC/CBC/CEC: /\b\d{3,6}(\.\d+)*\b/
-  CRC:         /\bR\d{3}([.,]\d+)*\b/
-  Energy:      /\b\d{2,3}\.\d+(\.\d+)?\b/
+  CFC/CBC: /\b\d{3,4}(\.\d+)*\b/
+  CRC:     /\bR\d{3}([.,]\d+)*\b/
 
-Examples: 1205.2.1.2, R324.6, 110.10</pre>
+O(1) lookup for exact sections
+Examples: 1205.2, R324.6, 8216</pre>
               </div>
               <div>
-                <div class="label">2. MMR Semantic Search</div>
-                <pre>ChromaDB.max_marginal_relevance_search()
+                <div class="label">2. Semantic (Vectors)</div>
+                <pre>ChromaDB.similarity_search()
 
-fetch_k: k × 4
-lambda_mult: 0.5
+Finds meaning matches:
+"battery" ↔ "ESS"
+"solar" ↔ "photovoltaic"
 
-Score = λ×sim(q,d) - (1-λ)×max(sim(d,dᵢ))
-        ─────────   ───────────────────
-        relevance        diversity</pre>
+use_mmr: true
+lambda_mult: 0.5</pre>
               </div>
+              <div>
+                <div class="label">3. BM25 (Keywords)</div>
+                <pre>Term frequency matching
+
+Finds exact keywords:
+"triplex", "R-3 occupancy"
+
+Catches terms vectors miss</pre>
+              </div>
+            </div>
+            <div class="summary-bar">
+              <span class="key">RRF Fusion</span>
+              <span class="value">score = Σ 1/(k + rank_i) → combines all 3 methods</span>
             </div>
           </div>
 
           <div class="summary-bar">
             <span class="key">total_retrieved (deduplicated)</span>
-            <span class="value">~19 chunks</span>
+            <span class="value">~15-19 chunks</span>
           </div>
         </div>
       </div>
@@ -652,15 +681,15 @@ Section: 8216 > Solar Energy Systems
               </div>
             </div>
             <div>
-              <div class="label">System Prompt (truncated)</div>
-              <pre>"Expert CA solar permit compliance
-assistant with access to STATE CODES
-and MUNICIPAL CODES.
+              <div class="label">4-Step Reasoning Process</div>
+              <pre>For eligibility questions:
+1. EXTRACT all criteria from code
+2. EVALUATE each (✓/✗/?)
+3. APPLY strict logic
+   "X only" → others NOT allowed
+4. Give YES/NO with citations
 
-RULES:
-1. Municipal OVERRIDES state baseline
-2. Always cite section numbers
-3. Never fabricate requirements"</pre>
+Prevents false positives</pre>
             </div>
           </div>
         </div>
@@ -677,9 +706,10 @@ RULES:
           <pre>{
   "answer": "📍 **{city}** (with CA State Codes)\n\n{llm_response}",
   "traces": [
-    { "name": "state_code_search",  "duration_ms": 245,  "details": "15 chunks from 5 codes" },
+    { "name": "exact_lookup",       "duration_ms": 5,    "details": "Section 8216 found" },
+    { "name": "state_code_search",  "duration_ms": 245,  "details": "12 chunks from 4 codes" },
     { "name": "municipal_search",   "duration_ms": 89,   "details": "4 chunks from ca_arvin" },
-    { "name": "format_docs",        "duration_ms": 12,   "details": "24891 chars" },
+    { "name": "rrf_fusion",         "duration_ms": 15,   "details": "Combined 3 methods" },
     { "name": "llm_call",           "duration_ms": 8420, "details": "GPT-4o response" }
   ],
   "city": "Arvin",
@@ -693,39 +723,61 @@ RULES:
     <!-- Data Stores -->
     <div class="section">
       <div class="section-title">DATA STORES</div>
-      <div class="grid-2" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="grid-2">
         <div class="data-store">
           <div class="data-store-header">
             <span class="data-store-name">ChromaDB</span>
-            <span class="data-store-type">Vector Store</span>
+            <span class="data-store-type">Vector Store (Docker Volume)</span>
           </div>
-          <pre>./chroma_db/
-├── {uuid}/           # collection data
-├── chroma.sqlite3    # metadata
-└── *_sections.json   # exact lookup index</pre>
+          <pre>/data/vector_store/
+├── chroma.sqlite3              # embeddings
+├── {collection}_sections.json  # exact lookup
+└── {collection}_chapters.json  # chapter index
+
+Collections: ~500+ (4 state + municipalities)</pre>
         </div>
         <div class="data-store">
           <div class="data-store-header">
             <span class="data-store-name">PostgreSQL</span>
-            <span class="data-store-type">Routing Database</span>
+            <span class="data-store-type">Two Databases</span>
           </div>
-          <pre>municipalities
-├── id                  SERIAL
-├── name                VARCHAR
-├── chroma_collection_id VARCHAR
-└── doc_count           INT  # (planned)</pre>
+          <pre>goodleap_dev:
+├── municipalities (name → collection_id)
+
+goodleap_rag_logs:
+├── query_logs    (questions, answers, traces)
+├── conversations (chat history, JSONB messages)
+└── feedback      (ratings 0.5-5.0, comments)</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Endpoints -->
+    <div class="section">
+      <div class="section-title">API ENDPOINTS</div>
+      <div class="grid-2">
+        <div class="data-store">
+          <div class="data-store-header">
+            <span class="data-store-name">Core Endpoints</span>
+            <span class="data-store-type">FastAPI</span>
+          </div>
+          <pre>POST /ask              # RAG query
+GET  /cities           # List municipalities
+GET  /health           # Health check
+POST /conversations    # Save chat
+GET  /conversations    # List user chats
+GET  /my-queries       # User query history</pre>
         </div>
         <div class="data-store">
           <div class="data-store-header">
-            <span class="data-store-name">Section Index</span>
-            <span class="data-store-type">JSON Files</span>
+            <span class="data-store-name">Feedback & Admin</span>
+            <span class="badge badge-green">NEW</span>
           </div>
-          <pre>{collection}_sections.json
-{
-  "1205.2.1.2": "{chunk_text}",
-  "R324.6":     "{chunk_text}",
-  "110.10":     "{chunk_text}"
-}</pre>
+          <pre>POST /feedback              # Submit rating
+GET  /feedback/query/{id}   # Get feedback
+GET  /admin/feedback        # List all
+GET  /admin/feedback/stats  # Analytics
+GET  /admin/logs            # Query logs</pre>
         </div>
       </div>
     </div>
@@ -739,11 +791,11 @@ RULES:
           <div class="metric-label">Latency</div>
         </div>
         <div class="metric">
-          <div class="metric-value">19</div>
+          <div class="metric-value">15-19</div>
           <div class="metric-label">Chunks</div>
         </div>
         <div class="metric">
-          <div class="metric-value">5</div>
+          <div class="metric-value">4</div>
           <div class="metric-label">State Codes</div>
         </div>
         <div class="metric">
@@ -751,12 +803,12 @@ RULES:
           <div class="metric-label">Cities</div>
         </div>
         <div class="metric">
-          <div class="metric-value">0.1</div>
-          <div class="metric-label">LLM Temp</div>
+          <div class="metric-value">3</div>
+          <div class="metric-label">Search Methods</div>
         </div>
         <div class="metric">
-          <div class="metric-value">0.5</div>
-          <div class="metric-label">MMR λ</div>
+          <div class="metric-value">RRF</div>
+          <div class="metric-label">Fusion</div>
         </div>
       </div>
     </div>
@@ -766,35 +818,51 @@ RULES:
       <div class="section-title">STACK</div>
       <div class="stack-items">
         <div class="stack-item">
+          <span class="stack-item-name">FastAPI</span>
+          <span class="stack-item-desc">Backend</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">Pydantic</span>
+          <span class="stack-item-desc">Validation</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">SQLAlchemy</span>
+          <span class="stack-item-desc">ORM</span>
+        </div>
+        <div class="stack-item">
           <span class="stack-item-name">ChromaDB</span>
           <span class="stack-item-desc">Vector DB</span>
         </div>
         <div class="stack-item">
           <span class="stack-item-name">PostgreSQL</span>
-          <span class="stack-item-desc">Routing</span>
+          <span class="stack-item-desc">Metadata</span>
         </div>
         <div class="stack-item">
           <span class="stack-item-name">OpenAI</span>
           <span class="stack-item-desc">Embeddings + LLM</span>
         </div>
         <div class="stack-item">
-          <span class="stack-item-name">FastAPI</span>
-          <span class="stack-item-desc">Backend</span>
-        </div>
-        <div class="stack-item">
           <span class="stack-item-name">React</span>
           <span class="stack-item-desc">Frontend</span>
         </div>
         <div class="stack-item">
-          <span class="stack-item-name">LangChain</span>
-          <span class="stack-item-desc">Orchestration</span>
+          <span class="stack-item-name">TypeScript</span>
+          <span class="stack-item-desc">Type Safety</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">Docker</span>
+          <span class="stack-item-desc">Containers</span>
+        </div>
+        <div class="stack-item">
+          <span class="stack-item-name">GitHub Actions</span>
+          <span class="stack-item-desc">CI/CD</span>
         </div>
       </div>
     </div>
 
     <!-- Footer -->
     <footer class="footer">
-      <span>HybridRAGPipeline · MunicipalityRouter · smart_driver.py</span>
+      <span>MultiCollectionRetriever · RAGService · MunicipalityService</span>
       <span>© 2024 GoodLeap · SOL Building Codes</span>
     </footer>
 
